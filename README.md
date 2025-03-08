@@ -24,7 +24,7 @@
 
 1. 克隆仓库：
 ```bash
-git clone https://github.com/yourusername/FileManager.git
+https://github.com/VinciYan/FileManager.git
 ```
 
 2. 配置MinIO：
