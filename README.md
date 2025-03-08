@@ -34,12 +34,12 @@ git clone https://github.com/yourusername/FileManager.git
 {
   "MinioConfig": {
     "Endpoint": "your-minio-endpoint",
-    "AccessKey": "your-access-key",
+    "AccessKey": "your-minio-endpoint",
     "SecretKey": "your-secret-key",
     "BucketName": "your-bucket-name",
-    "UseSSL": false
+    "Secure": false
   }
-}
+} 
 ```
 
 3. 运行数据库迁移：
@@ -72,10 +72,6 @@ dotnet run
    - 使用顶部搜索框搜索文件
    - 支持按文件名、备注、MinIO链接搜索
    - 基于SQLite的快速本地搜索
-
-4. **查看模式**
-   - 支持列表和详细信息两种查看模式
-   - 可以自定义显示列
 
 ## 🤝 贡献
 
