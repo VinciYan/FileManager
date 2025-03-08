@@ -1,0 +1,29 @@
+<Application x:Class="FileManager.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:FileManager"
+             xmlns:views="clr-namespace:FileManager.Views"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
+             xmlns:scm="clr-namespace:System.ComponentModel;assembly=WindowsBase"
+             xmlns:converters="clr-namespace:FileManager.Converters">
+    <Application.Resources>
+        <ResourceDictionary>
+            <sys:Double x:Key="DefaultMargin">10</sys:Double>
+            <sys:Double x:Key="DefaultPadding">5</sys:Double>
+            <sys:Double x:Key="DefaultIconSize">16</sys:Double>
+            
+            <converters:OperationColorConverter x:Key="OperationColorConverter"/>
+            <converters:StatusColorConverter x:Key="StatusColorConverter"/>
+            <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+            
+            <Style x:Key="DefaultButtonStyle" TargetType="Button">
+                <Setter Property="Padding" Value="10,5"/>
+                <Setter Property="Margin" Value="5"/>
+            </Style>
+            
+            <ResourceDictionary.MergedDictionaries>
+                <!-- 这里可以添加主题资源 -->
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application> 
