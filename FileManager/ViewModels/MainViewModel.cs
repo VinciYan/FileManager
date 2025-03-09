@@ -12,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using static FileManager.Services.MinioService;
 
 namespace FileManager.ViewModels
 {
@@ -74,6 +75,10 @@ namespace FileManager.ViewModels
             
             CurrentView = _fileListView;
             InitializeData();
+        }
+        public MinioConfig GetMinioConfig()
+        {
+            return _minioService.Config;
         }
 
         private async void TaskPanel_RetryRequested(object? sender, UploadLog log)
@@ -148,117 +153,152 @@ namespace FileManager.ViewModels
             // 计算文件的MD5值
             var md5Hash = FileUtils.CalculateMd5(filePath);
 
-            // 检查是否存在相同MD5的文件
-            var existingFile = _dbContext.FileItems
-                .FirstOrDefault(x => !x.IsFolder && x.Md5Hash == md5Hash);
+            var retryCount = 0;
+            const int maxRetries = 3;
 
-            var log = new UploadLog
+            while (retryCount < maxRetries)
             {
-                LocalPath = filePath,
-                Status = existingFile != null ? "Skipped" : "Uploading",
-                Progress = 0,
-                CreatedAt = DateTime.Now,
-                UpdatedAt = DateTime.Now,
-                IsRetryable = existingFile == null,
-                Operation = OperationType.Upload
-            };
-
-            _dbContext.UploadLogs.Add(log);
-            await _dbContext.SaveChangesAsync();
-            TaskPanel?.AddLog(log);
-
-            if (existingFile != null)
-            {
-                // 文件已存在，创建新的文件记录但使用现有的MinIO URL
-                var newFile = new FileItem
+                try
                 {
-                    Name = fileName,
-                    Extension = extension,
-                    IsFolder = false,
-                    ParentId = parentFolder?.Id ?? SelectedFolder?.Id,
-                    Path = parentFolder == null ? 
-                        (SelectedFolder == null ? fileName : Path.Combine(SelectedFolder.Path, fileName)) :
-                        Path.Combine(parentFolder.Path, fileName),
-                    MinioUrl = existingFile.MinioUrl,
-                    Md5Hash = md5Hash,
-                    DisplayMd5 = md5Hash,
-                    Notes = string.Empty,
-                    CreatedAt = DateTime.Now,
-                    UpdatedAt = DateTime.Now
-                };
+                    // 检查是否存在相同MD5的文件
+                    var existingFile = await _dbContext.FileItems
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(x => !x.IsFolder && x.Md5Hash == md5Hash);
 
-                _dbContext.FileItems.Add(newFile);
-
-                log.Status = "Success";
-                log.Message = "文件已存在，跳过上传";
-                log.MinioUrl = existingFile.MinioUrl;
-                log.Progress = 100;
-                log.IsRetryable = false;
-
-                await _dbContext.SaveChangesAsync();
-                TaskPanel?.UpdateLog(log);
-                
-                // 刷新当前文件夹的内容
-                LoadCurrentFolderItems(SelectedFolder?.Id);
-                return;
-            }
-
-            var progress = new Progress<int>(percent =>
-            {
-                log.Progress = percent;
-                TaskPanel?.UpdateLog(log);
-            });
-
-            try
-            {
-                // 使用MD5值作为文件夹，原始文件名作为文件名
-                var minioPath = $"{md5Hash}/{originalFileName}";
-                var (success, url, message) = await _minioService.UploadFileAsync(filePath, progress, minioPath);
-
-                if (success)
-                {
-                    var newFile = new FileItem
+                    var log = new UploadLog
                     {
-                        Name = fileName,
-                        Extension = extension,
-                        IsFolder = false,
-                        ParentId = parentFolder?.Id ?? SelectedFolder?.Id,
-                        Path = parentFolder == null ? 
-                            (SelectedFolder == null ? fileName : Path.Combine(SelectedFolder.Path, fileName)) :
-                            Path.Combine(parentFolder.Path, fileName),
-                        MinioUrl = url,
-                        Md5Hash = md5Hash,
-                        DisplayMd5 = md5Hash,
-                        Notes = string.Empty,
+                        LocalPath = filePath,
+                        Status = existingFile != null ? "Skipped" : "Uploading",
+                        Progress = 0,
                         CreatedAt = DateTime.Now,
-                        UpdatedAt = DateTime.Now
+                        UpdatedAt = DateTime.Now,
+                        IsRetryable = existingFile == null,
+                        Operation = OperationType.Upload
                     };
 
-                    _dbContext.FileItems.Add(newFile);
+                    _dbContext.UploadLogs.Add(log);
+                    await _dbContext.SaveChangesAsync();
+                    TaskPanel?.AddLog(log);
 
-                    log.Status = "Success";
-                    log.Message = "上传成功";
-                    log.MinioUrl = url;
-                    log.IsRetryable = false;
+                    if (existingFile != null)
+                    {
+                        // 文件已存在，创建新的文件记录但使用现有的MinIO URL
+                        var newFile = new FileItem
+                        {
+                            Name = fileName,
+                            Extension = extension,
+                            IsFolder = false,
+                            ParentId = parentFolder?.Id ?? SelectedFolder?.Id,
+                            Path = parentFolder == null ? 
+                                (SelectedFolder == null ? fileName : Path.Combine(SelectedFolder.Path, fileName)) :
+                                Path.Combine(parentFolder.Path, fileName),
+                            MinioUrl = existingFile.MinioUrl,
+                            Md5Hash = md5Hash,
+                            DisplayMd5 = md5Hash,
+                            Notes = string.Empty,
+                            CreatedAt = DateTime.Now,
+                            UpdatedAt = DateTime.Now
+                        };
+
+                        _dbContext.FileItems.Add(newFile);
+                        await _dbContext.SaveChangesAsync();
+
+                        log.Status = "Success";
+                        log.Message = "文件已存在，跳过上传";
+                        log.MinioUrl = existingFile.MinioUrl;
+                        log.Progress = 100;
+                        log.IsRetryable = false;
+
+                        await _dbContext.SaveChangesAsync();
+                        TaskPanel?.UpdateLog(log);
+                        
+                        // 刷新当前文件夹的内容
+                        LoadCurrentFolderItems(SelectedFolder?.Id);
+                        return;
+                    }
+
+                    // 使用MD5值作为文件夹，原始文件名作为文件名
+                    var minioPath = $"{md5Hash}/{originalFileName}";
+                    var fileInfo = new FileInfo(filePath);
+                    var (success, url, message) = fileInfo.Length > 10 * 1024 * 1024 // 大于10MB的文件使用分片上传
+                        ? await _minioService.UploadLargeFileAsync(
+                            filePath,
+                            new Progress<UploadProgress>(progress =>
+                            {
+                                log.Progress = progress.Percentage;
+                                log.Message = $"正在上传第 {progress.PartNumber}/{progress.TotalParts} 个分片";
+                                TaskPanel?.UpdateLog(log);
+                            }),
+                            minioPath)
+                        : await _minioService.UploadFileAsync(
+                            filePath,
+                            new Progress<int>(percent =>
+                            {
+                                log.Progress = percent;
+                                log.Message = $"已上传 {percent}%";
+                                TaskPanel?.UpdateLog(log);
+                            }),
+                            minioPath);
+
+                    if (success)
+                    {
+                        var newFile = new FileItem
+                        {
+                            Name = fileName,
+                            Extension = extension,
+                            IsFolder = false,
+                            ParentId = parentFolder?.Id ?? SelectedFolder?.Id,
+                            Path = parentFolder == null ? 
+                                (SelectedFolder == null ? fileName : Path.Combine(SelectedFolder.Path, fileName)) :
+                                Path.Combine(parentFolder.Path, fileName),
+                            MinioUrl = url,
+                            Md5Hash = md5Hash,
+                            DisplayMd5 = md5Hash,
+                            Notes = string.Empty,
+                            CreatedAt = DateTime.Now,
+                            UpdatedAt = DateTime.Now
+                        };
+
+                        _dbContext.FileItems.Add(newFile);
+                        await _dbContext.SaveChangesAsync();
+
+                        log.Status = "Success";
+                        log.Message = "上传成功";
+                        log.MinioUrl = url;
+                        log.Progress = 100;
+                        log.IsRetryable = false;
+                    }
+                    else
+                    {
+                        log.Status = "Failed";
+                        log.Message = message;
+                        log.IsRetryable = true;
+                    }
+
+                    log.UpdatedAt = DateTime.Now;
+                    await _dbContext.SaveChangesAsync();
+                    TaskPanel?.UpdateLog(log);
+
+                    // 刷新当前文件夹的内容
+                    LoadCurrentFolderItems(SelectedFolder?.Id);
+                    return; // 成功完成，退出重试循环
                 }
-                else
+                catch (DbUpdateConcurrencyException ex)
                 {
-                    log.Status = "Failed";
-                    log.Message = message;
+                    retryCount++;
+                    if (retryCount >= maxRetries)
+                    {
+                        MessageBox.Show($"数据更新冲突，已重试{maxRetries}次仍然失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                        return;
+                    }
+                    await Task.Delay(100 * retryCount); // 每次重试增加延迟
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"上传文件时出错: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
                 }
             }
-            catch (Exception ex)
-            {
-                log.Status = "Failed";
-                log.Message = ex.Message;
-            }
-
-            log.UpdatedAt = DateTime.Now;
-            await _dbContext.SaveChangesAsync();
-            TaskPanel?.UpdateLog(log);
-
-            // 刷新当前文件夹的内容
-            LoadCurrentFolderItems(SelectedFolder?.Id);
         }
 
         private async Task UploadFileAsync(string filePath)
@@ -575,12 +615,6 @@ namespace FileManager.ViewModels
         [RelayCommand]
         private void CreateFile()
         {
-            if (SelectedFolder == null)
-            {
-                MessageBox.Show("请先选择一个文件夹", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
             var dialog = new CreateFileDialog
             {
                 Owner = Application.Current.MainWindow
@@ -595,8 +629,8 @@ namespace FileManager.ViewModels
                         Name = dialog.FileName,
                         Extension = dialog.Extension,
                         IsFolder = false,
-                        ParentId = SelectedFolder.Id,
-                        Path = System.IO.Path.Combine(SelectedFolder.Path, dialog.FileName),
+                        ParentId = SelectedFolder?.Id,
+                        Path = SelectedFolder == null ? dialog.FileName : System.IO.Path.Combine(SelectedFolder.Path, dialog.FileName),
                         Notes = dialog.Notes,
                         MinioUrl = dialog.MinioUrl,
                         CreatedAt = DateTime.Now,
@@ -608,7 +642,7 @@ namespace FileManager.ViewModels
 
                     // 刷新文件夹结构和当前文件夹内容
                     LoadFolderStructure();
-                    LoadCurrentFolderItems(SelectedFolder.Id);
+                    LoadCurrentFolderItems(SelectedFolder?.Id);
                 }
                 catch (Exception ex)
                 {
@@ -662,6 +696,8 @@ namespace FileManager.ViewModels
                     await _dbContext.SaveChangesAsync();
                     TaskPanel?.AddLog(log);
 
+                    bool deleteFromDatabase = true;
+
                     // 如果是文件夹，需要递归删除所有子项
                     if (item.IsFolder)
                     {
@@ -680,7 +716,7 @@ namespace FileManager.ViewModels
 
                             if (sameHashCount == 0)
                             {
-                                var (success, message) = await _minioService.DeleteObjectAsync(childItem.MinioUrl);
+                                var (success, message) = await _minioService.DeleteObjectAsync($"http://{_minioService.Config.Endpoint}/{item.MinioUrl}");
                                 if (!success)
                                 {
                                     log.Status = "Failed";
@@ -688,13 +724,17 @@ namespace FileManager.ViewModels
                                     log.UpdatedAt = DateTime.Now;
                                     await _dbContext.SaveChangesAsync();
                                     TaskPanel?.UpdateLog(log);
+                                    deleteFromDatabase = false;
                                     continue;
                                 }
                             }
                         }
 
-                        // 从数据库中删除所有子项
-                        _dbContext.RemoveRange(childItems);
+                        if (deleteFromDatabase)
+                        {
+                            // 从数据库中删除所有子项
+                            _dbContext.RemoveRange(childItems);
+                        }
                     }
 
                     // 如果当前项有 MinioUrl，检查是否可以删除 MinIO 中的对象
@@ -707,7 +747,7 @@ namespace FileManager.ViewModels
 
                         if (sameHashCount == 0)
                         {
-                            var (success, message) = await _minioService.DeleteObjectAsync(item.MinioUrl);
+                            var (success, message) = await _minioService.DeleteObjectAsync($"http://{_minioService.Config.Endpoint}/{item.MinioUrl}");
                             if (!success)
                             {
                                 log.Status = "Failed";
@@ -715,19 +755,30 @@ namespace FileManager.ViewModels
                                 log.UpdatedAt = DateTime.Now;
                                 await _dbContext.SaveChangesAsync();
                                 TaskPanel?.UpdateLog(log);
+                                deleteFromDatabase = false;
                                 continue;
                             }
                         }
                     }
 
-                    // 从数据库中删除当前项
-                    _dbContext.Remove(item);
-                    await _dbContext.SaveChangesAsync();
+                    if (deleteFromDatabase)
+                    {
+                        // 从数据库中删除当前项
+                        _dbContext.Remove(item);
+                        await _dbContext.SaveChangesAsync();
 
-                    // 更新日志状态
-                    log.Status = "Success";
-                    log.Message = item.IsFolder ? "文件夹及其内容已成功删除" : "文件已成功删除";
-                    log.Progress = 100;
+                        // 更新日志状态
+                        log.Status = "Success";
+                        log.Message = item.IsFolder ? "文件夹及其内容已成功删除" : "文件已成功删除";
+                        log.Progress = 100;
+                    }
+                    else
+                    {
+                        log.Status = "Failed";
+                        log.Message = "MinIO文件删除失败，数据库记录未删除";
+                        log.Progress = 0;
+                    }
+
                     log.UpdatedAt = DateTime.Now;
                     await _dbContext.SaveChangesAsync();
                     TaskPanel?.UpdateLog(log);

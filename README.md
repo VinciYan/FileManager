@@ -34,12 +34,12 @@ git clone https://github.com/yourusername/FileManager.git
 {
   "MinioConfig": {
     "Endpoint": "your-minio-endpoint",
-    "AccessKey": "your-access-key",
+    "AccessKey": "your-minio-endpoint",
     "SecretKey": "your-secret-key",
     "BucketName": "your-bucket-name",
-    "UseSSL": false
+    "Secure": false
   }
-}
+} 
 ```
 
 3. 运行数据库迁移：

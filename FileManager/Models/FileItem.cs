@@ -24,5 +24,7 @@ namespace FileManager.Models
         public virtual ICollection<FileItem> Children { get; set; } = new List<FileItem>();
 
         public ImageSource IconSource => IsFolder ? FolderIcon : FileIcon;
+
+        public string DisplayNotes => Notes.Length > 100 ? Notes[..100] + "..." : Notes;
     }
 } 

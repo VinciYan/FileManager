@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FileManager.Models;
+using FileManager.Services;
 using FileManager.ViewModels;
 
 namespace FileManager.Views
@@ -205,17 +206,77 @@ namespace FileManager.Views
         }
 
         private void CopyMinioUrl_Click(object sender, RoutedEventArgs e)
-        {
-            if (ItemsListView.SelectedItem is FileItem selectedItem && !string.IsNullOrEmpty(selectedItem.MinioUrl))
+        {            
+            if (ItemsListView.SelectedItem is FileItem selectedItem && DataContext is MainViewModel viewModel && !string.IsNullOrEmpty(selectedItem.MinioUrl))
             {
                 try
                 {
-                    Clipboard.SetText(selectedItem.MinioUrl);
+                    Clipboard.SetText($"http://{viewModel.GetMinioConfig().Endpoint}/{selectedItem.MinioUrl}");
                     MessageBox.Show("MinIO链接已复制到剪贴板", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show($"复制MinIO链接时出错: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+        private void CopyIntranetMinioUrl_Click(object sender, RoutedEventArgs e)
+        {
+            if (ItemsListView.SelectedItem is FileItem selectedItem && DataContext is MainViewModel viewModel && !string.IsNullOrEmpty(selectedItem.MinioUrl))
+            {
+                try
+                {
+                    Clipboard.SetText($"http://{viewModel.GetMinioConfig().IntranetEndpoint}/{selectedItem.MinioUrl}");
+                    MessageBox.Show("内网MinIO链接已复制到剪贴板", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"复制内网MinIO链接时出错: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }        
+
+        private void CopyMarkdownUrl_Click(object sender, RoutedEventArgs e)
+        {
+            if (ItemsListView.SelectedItem is FileItem selectedItem && DataContext is MainViewModel viewModel && !string.IsNullOrEmpty(selectedItem.MinioUrl))
+            {
+                try
+                {
+                    var extension = selectedItem.Extension?.ToLower();
+                    bool isImage = extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp";
+                    
+                    string markdownLink = isImage
+                        ? $"![{selectedItem.Name}{selectedItem.Extension}](http://{viewModel.GetMinioConfig().Endpoint}/{selectedItem.MinioUrl})"
+                        : $"[{selectedItem.Name}{selectedItem.Extension}](http://{viewModel.GetMinioConfig().Endpoint}/{selectedItem.MinioUrl})";
+                    
+                    Clipboard.SetText(markdownLink);
+                    MessageBox.Show("Markdown链接已复制到剪贴板", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"复制Markdown链接时出错: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+        private void CopyIntranetMarkdownUrl_Click(object sender, RoutedEventArgs e)
+        {
+            if (ItemsListView.SelectedItem is FileItem selectedItem && DataContext is MainViewModel viewModel && !string.IsNullOrEmpty(selectedItem.MinioUrl))
+            {
+                try
+                {
+                    var extension = selectedItem.Extension?.ToLower();
+                    bool isImage = extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp";
+
+                    string markdownLink = isImage
+                        ? $"![{selectedItem.Name}{selectedItem.Extension}](http://{viewModel.GetMinioConfig().IntranetEndpoint}/{selectedItem.MinioUrl})"
+                        : $"[{selectedItem.Name}{selectedItem.Extension}](http://{viewModel.GetMinioConfig().IntranetEndpoint}/{selectedItem.MinioUrl})";
+
+                    Clipboard.SetText(markdownLink);
+                    MessageBox.Show("Markdown链接已复制到剪贴板", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"复制Markdown链接时出错: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }

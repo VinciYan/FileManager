@@ -2,3 +2,12 @@
 .vs
 net8.0-windows
 obj
+/obj
+obj/*
+**/obj
+*/obj
+*.db
+FileManager/obj/FileManager.csproj.nuget.g.props
+FileManager/obj/project.assets.json
+FileManager/obj/project.nuget.cache
+FileManager/obj/FileManager.csproj.nuget.dgspec.json

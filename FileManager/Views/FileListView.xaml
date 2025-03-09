@@ -18,6 +18,9 @@
             <MenuItem Header="粘贴" Click="PasteItems_Click"/>
             <Separator/>
             <MenuItem Header="复制MinIO链接" Click="CopyMinioUrl_Click"/>
+            <MenuItem Header="复制内网MinIO链接" Click="CopyIntranetMinioUrl_Click"/>
+            <MenuItem Header="复制为Markdown链接" Click="CopyMarkdownUrl_Click"/>
+            <MenuItem Header="复制为内网Markdown链接" Click="CopyIntranetMarkdownUrl_Click"/>
             <Separator/>
             <MenuItem Header="全选" Click="SelectAll_Click"/>
         </ContextMenu>
@@ -141,7 +144,7 @@
                     <GridViewColumn Header="MD5" Width="250" 
                                   DisplayMemberBinding="{Binding DisplayMd5}"/>
                     <GridViewColumn Header="备注" Width="200" 
-                                  DisplayMemberBinding="{Binding Notes}"/>
+                                  DisplayMemberBinding="{Binding DisplayNotes}"/>
                     <GridViewColumn Header="MinIO链接" Width="300" 
                                   DisplayMemberBinding="{Binding MinioUrl}"/>
                 </GridView>
